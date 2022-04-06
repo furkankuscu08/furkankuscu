@@ -1,0 +1,109 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+df = pd.read_csv('https://files.grouplens.org/datasets/movielens/ml-100k/u.data', delimiter=r'\t',
+                 names=['user_id', 'item_id', 'rating', 'timestamp'],engine ='python') 
+ 
+r = df.pivot(index='user_id', columns='item_id', values='rating').values
+
+values_n = pd.DataFrame(r).T.copy()
+values = values_n.fillna(0)
+
+num_movies = values.shape[0] #movies:1682 - row
+num_users = values.shape[1] #users:943 - column
+
+movie_bias= np.random.randn(1682,1) + 2.5
+user_bias = np.random.randn(1, 943) + 2.5
+
+binary = ~pd.isna(values_n)
+for i in range(len(binary.columns)):
+    binary[i] = binary[i].replace({True: 1, False: 0})
+    
+values_np = values.to_numpy().copy()
+binary_np = binary.to_numpy().copy()
+
+print("Dataset - y",values_np.shape,type(values_np))
+print("Binary - b",binary_np.shape,type(binary_np))
+print("movie bias - movie_bi",movie_bias.shape,type(movie_bias))
+print("user bias - user_bi",user_bias.shape,type(user_bias))
+
+def CostFunction(y, b, movie_bi, user_bi):
+    
+    predictions = movie_bi+user_bi
+    err = (predictions-y)**2
+    J = (1/2) * np.sum(np.sum(err * b))
+    
+    return J
+    
+def CostFunction2(y, b, movie_bi, user_bi,lamda):
+    
+    predictions = movie_bi+user_bi
+    err = (predictions-y)**2
+    J = ((1/2) * np.sum(np.sum(err * b)))
+    J = J + (lamda/2)*(np.sum(movie_bi**2)+np.sum(user_bi**2))
+    
+    return J
+    
+#Aşağıdaki fonksiyonda daha hızlı çalışması için vektörize etmeyi denedim ama nedense başaramadım ve for loop'una almaya karar verdim.
+#Fırsat olursa bunu öğrenmek isterim. 
+
+def UpdateGradients(y, b, movie_bi_ori, user_bi_ori, num_iter, lr):
+    
+    movie_bi=movie_bi_ori.copy()
+    user_bi=user_bi_ori.copy()
+    J_hist = []
+    
+    for i in range(num_iter):
+        one_J = CostFunction(y,b,movie_bi, user_bi)
+        for i in range(1682):
+            for j in range(943):
+                if b[i,j]==1:
+                    movie_bi[i,0] = movie_bi[i,0] - lr*(y[i,j]-movie_bi[i,0]-user_bi[0,j])*(-1)
+                    user_bi[0,j] = user_bi[0,j] - lr*(y[i,j]-movie_bi[i,0]-user_bi[0,j])*(-1)
+        J_hist.append(one_J)
+        
+    return movie_bi, user_bi, J_hist
+    
+
+def UpdateGradients2(y, b, movie_bi_ori, user_bi_ori, num_iter, lr,lamda):
+    
+    movie_bi=movie_bi_ori.copy()
+    user_bi=user_bi_ori.copy()
+    J_hist = []
+    
+    for i in range(num_iter):
+        one_J = CostFunction2(y,b,movie_bi, user_bi,lamda)
+        for i in range(1682):
+            for j in range(943):
+                if b[i,j]==1:
+                    movie_bi[i,0] = movie_bi[i,0] - lr*(y[i,j]-movie_bi[i,0]-user_bi[0,j])*(-1)-(lr*lamda*movie_bi[i,0])
+                    user_bi[0,j] = user_bi[0,j] - lr*(y[i,j]-movie_bi[i,0]-user_bi[0,j])*(-1)-(lr*lamda*user_bi[0,j])
+        J_hist.append(one_J)
+        
+    return movie_bi, user_bi, J_hist
+    
+movie_new, user_new, J_hist =  UpdateGradients(values_np, binary_np, movie_bias, user_bias,50,0.01)
+
+plt.figure()
+plt.plot(J_hist)
+plt.xlabel("Epochs")
+plt.ylabel("Cost Value")
+
+pr = movie_new + user_new
+final_predictions = pd.DataFrame(pr).copy()
+
+final_predictions
+
+movie_new2, user_new2, J_hist2 =  UpdateGradients2(values_np, binary_np, movie_bias, user_bias,50,0.01,0.1)
+
+plt.figure()
+plt.plot(J_hist2)
+plt.xlabel("Epochs")
+plt.ylabel("Cost Value")
+
+pr2 = movie_new2 + user_new2
+final_predictions2 = pd.DataFrame(pr).copy()
+
+final_predictions2
+
